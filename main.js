@@ -279,7 +279,7 @@ function updateAxisLabels(panelConfig) {
   }
   
   // Calcul des nouvelles positions basées sur les dimensions du panneau
-  const xPosition = (panelConfig.length / 2) + 30; // Position X basée sur la longueur + décalage
+  const xPosition = (panelConfig.length / 2) + 100; // Position X basée sur la longueur + décalage
   const yPosition = (panelConfig.thickness / 2) + 30; // Position Y basée sur l'épaisseur + décalage
   const zPosition = (panelConfig.width / 2) + 30; // Position Z basée sur la largeur + décalage
   
