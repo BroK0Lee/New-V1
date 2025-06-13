@@ -8,7 +8,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import { createPanelGeometry } from './src/models/index.js';
-import { materials } from './src/materials.js';
+import { materials, constraints } from './src/materials.js';
+import { defaultConfig } from './src/config.js';
 import {
   initCircularCutModal,
   animateModal,
@@ -36,38 +37,8 @@ let axesHelper = null; // Référence aux axes pour pouvoir les redimensionner
 
 // Variables du modal gérées dans src/modals/circularCutModal.js
 
-// Configuration du panneau principal et des découpes
-const config = {
-  panel: {
-    length: 1000,   // Longueur en mm (valeur par défaut)
-    width: 500,     // Largeur en mm (valeur par défaut)
-    thickness: 20,  // Épaisseur en mm (valeur par défaut)
-    material: 'pine' // Matériau par défaut
-  },
-  cuts: [], // Tableau pour les futures découpes (trous, entailles, etc.)
-  grid: {
-    show: false,           // Grille masquée par défaut
-    sizeX: 10,            // Taille des cases en X (mm)
-    sizeZ: 10,            // Taille des cases en Z (mm)
-    autoSize: true        // Taille automatique selon les dimensions du modèle
-  }
-};
-
-// Contraintes de validation
-const constraints = {
-  panel: {
-    length: { min: 10, max: 2500 },    // Longueur entre 10 et 2500mm
-    width: { min: 10, max: 1250 },     // Largeur entre 10 et 1250mm
-    thickness: {                       // Épaisseurs disponibles par matériau
-      pine: [5, 10, 15, 18, 20],      // Épaisseurs disponibles pour le pin
-      oak: [10, 15, 18, 20, 25],      // Épaisseurs pour le chêne
-      birch: [5, 10, 15, 18, 20],     // Épaisseurs pour le bouleau
-      mdf: [5, 10, 15, 18, 20, 25],   // Épaisseurs pour le MDF
-      plywood: [5, 10, 15, 18, 20],   // Épaisseurs pour le contreplaqué
-      melamine: [10, 15, 18, 20, 25]  // Épaisseurs pour le mélaminé
-    }
-  }
-};
+// Configuration du panneau principal et des découpes - importée depuis src/config.js
+const config = { ...defaultConfig };
 
 // Définition des matériaux disponibles (déplacée dans src/materials.js)
 
