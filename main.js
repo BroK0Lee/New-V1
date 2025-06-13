@@ -6,7 +6,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import { createPanelGeometry } from './src/models/index.js';
 import { materials, constraints } from './src/materials.js';
 import { defaultConfig } from './src/config.js';
@@ -30,21 +29,22 @@ import {
   updateAxesAndLabels,
   disposeAxes
 } from './src/Tools/axesHelper.js';
+import {
+  initViewCube,
+  animateViewCube,
+  resizeViewCube,
+  updatePanelConfig,
+  disposeViewCube
+} from './src/Tools/viewCube.js';
 
 // Variables globales pour la scène Three.js
 let scene, camera, renderer, controls, labelRenderer;
-let cubeScene, cubeCamera, cubeRenderer, cubeMesh, cubeObject;
-let isDraggingCube = false;
-let lastCubePointer = new THREE.Vector2();
-let cubeOffsetQuat = new THREE.Quaternion();
 let currentPanelMesh = null;
 
 // Variables du modal gérées dans src/modals/circularCutModal.js
 
 // Configuration du panneau principal et des découpes - importée depuis src/config.js
 const config = { ...defaultConfig };
-
-// Définition des matériaux disponibles (déplacée dans src/materials.js)
 
 /**
  * Calcule la position optimale de la caméra en fonction des dimensions du panneau
@@ -205,26 +205,6 @@ function initThreeJS() {
   labelRenderer.domElement.style.pointerEvents = 'none';
   container.appendChild(labelRenderer.domElement);
 
-  // Scène et renderer pour le cube de visualisation
-  cubeScene = new THREE.Scene();
-  cubeCamera = new THREE.PerspectiveCamera(50, 1, 1, 1000);
-  cubeRenderer = new CSS3DRenderer();
-  cubeRenderer.setSize(200, 200);
-  cubeRenderer.domElement.id = 'view-cube';
-  cubeRenderer.domElement.style.position = 'absolute';
-  cubeRenderer.domElement.style.bottom = '10px';
-  cubeRenderer.domElement.style.right = '10px';
-  cubeRenderer.domElement.style.pointerEvents = 'auto';
-  container.appendChild(cubeRenderer.domElement);
-
- cubeObject = createViewCube(60);
-  cubeScene.add(cubeObject);
-
-  cubeRenderer.domElement.addEventListener('click', onCubeFaceClick);
-  cubeRenderer.domElement.addEventListener('pointerdown', onCubePointerDown);
-  cubeRenderer.domElement.addEventListener('pointermove', onCubePointerMove);
-  window.addEventListener('pointerup', onCubePointerUp);
-  
   // Configuration des contrôles orbit avec paramètres adaptatifs
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
@@ -233,6 +213,9 @@ function initThreeJS() {
   
   // Les limites de distance seront définies par updateCameraSettings
   updateCameraSettings(config.panel);
+  
+  // Initialisation du cube de visualisation
+  initViewCube(container, camera, controls, config.panel);
   
   // Éclairage de la scène
   setupLighting();
@@ -267,78 +250,6 @@ function setupLighting() {
   const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
   fillLight.position.set(-50, 50, -50);
   scene.add(fillLight);
-}
-
-/**
- * Crée le cube de visualisation avec des faces cliquables
- * @param {number} size - Taille du cube
- * @returns {THREE.Object3D}
- */
-function createViewCube(size) {
-  const cube = new THREE.Object3D();
-  const faces = [
-    { pos: [size / 2, 0, 0], rot: [0, Math.PI / 2, 0], label: '+X', axis: 'x', dir: 1 },
-    { pos: [-size / 2, 0, 0], rot: [0, -Math.PI / 2, 0], label: '-X', axis: 'x', dir: -1 },
-    { pos: [0, size / 2, 0], rot: [-Math.PI / 2, 0, 0], label: '+Y', axis: 'y', dir: 1 },
-    { pos: [0, -size / 2, 0], rot: [Math.PI / 2, 0, 0], label: '-Y', axis: 'y', dir: -1 },
-    { pos: [0, 0, size / 2], rot: [0, 0, 0], label: '+Z', axis: 'z', dir: 1 },
-    { pos: [0, 0, -size / 2], rot: [0, Math.PI, 0], label: '-Z', axis: 'z', dir: -1 }
-  ];
-  for (const f of faces) {
-    const div = document.createElement('div');
-    div.className = 'cube-face';
-    div.textContent = f.label;
-    div.dataset.axis = f.axis;
-    div.dataset.dir = f.dir;
-    const obj = new CSS3DObject(div);
-    obj.position.set(...f.pos);
-    obj.rotation.set(...f.rot);
-    cube.add(obj);
-  }
-  return cube;
-}
-
-/**
- * Gère le clic sur une face du cube de visualisation
- * @param {MouseEvent} event
- */
-function onCubeFaceClick(event) {
-  if (isDraggingCube) return;
-  const axis = event.target.dataset.axis;
-  const dir = event.target.dataset.dir ? parseFloat(event.target.dataset.dir) : NaN;
-  if (!axis || isNaN(dir)) return;
-  
-  // Calcul de la distance adaptative basée sur les dimensions du panneau
-  const cameraSettings = calculateOptimalCameraSettings(config.panel);
-  const distance = cameraSettings.distance;
-  
-  const pos = new THREE.Vector3();
-  pos[axis] = dir * distance;
-  camera.position.set(pos.x || 0, pos.y || 0, pos.z || 0);
-  camera.lookAt(0, config.panel.thickness / 2, 0);
-  controls.update();
-  cubeOffsetQuat.identity();
-}
-
-function onCubePointerDown(event) {
-  isDraggingCube = true;
-  lastCubePointer.set(event.clientX, event.clientY);
-  event.preventDefault();
-}
-
-function onCubePointerMove(event) {
-  if (!isDraggingCube) return;
-  const deltaX = event.clientX - lastCubePointer.x;
-  const deltaY = event.clientY - lastCubePointer.y;
-  const speed = 0.01;
-  const euler = new THREE.Euler(deltaY * speed, deltaX * speed, 0, 'XYZ');
-  const q = new THREE.Quaternion().setFromEuler(euler);
-  cubeOffsetQuat.multiply(q);
-  lastCubePointer.set(event.clientX, event.clientY);
-}
-
-function onCubePointerUp() {
-  isDraggingCube = false;
 }
 
 /**
@@ -400,6 +311,9 @@ function initUIControls() {
     config.panel.width = newWidth;
     config.panel.thickness = newThickness;
     config.panel.material = newMaterial;
+
+    // Mise à jour de la configuration du panneau pour le cube de visualisation
+    updatePanelConfig(config.panel);
 
     // Mise à jour de la caméra selon les nouvelles dimensions
     updateCameraSettings(config.panel);
@@ -578,12 +492,8 @@ function animate() {
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
 
-  cubeObject.quaternion.copy(camera.quaternion).multiply(cubeOffsetQuat);
-  cubeCamera.position.copy(camera.position);
-  cubeCamera.position.sub(controls.target);
-  cubeCamera.position.setLength(100);
-  cubeCamera.lookAt(cubeScene.position);
-  cubeRenderer.render(cubeScene, cubeCamera);
+  // Animation du cube de visualisation
+  animateViewCube();
   
   // Animation du modal si actif
   animateModal();
@@ -602,7 +512,9 @@ function handleWindowResize() {
   
   renderer.setSize(width, height);
   labelRenderer.setSize(width, height);  
-  cubeRenderer.setSize(200, 200);
+  
+  // Redimensionnement du cube de visualisation
+  resizeViewCube();
   
   // Redimensionnement du renderer du modal si actif
   const modalRenderer = getModalRenderer();
