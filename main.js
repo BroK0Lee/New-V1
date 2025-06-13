@@ -15,7 +15,6 @@ import {
   getModalCamera,
   getModalRenderer
 } from './src/modals/circularCutModal.js';
-import { FaceSelectionTool } from "./src/Tools/faceSelectionTool.js";
 import { CSGManager } from './src/csg/CSGManager.ts';
 
 // Variables globales pour la scène Three.js
@@ -30,7 +29,6 @@ let gridHelper = null; // Référence à la grille pour pouvoir la repositionner
 let xLabelObj = null, yLabelObj = null, zLabelObj = null; // Références aux labels des axes
 let axesHelper = null; // Référence aux axes pour pouvoir les redimensionner
 
-let faceSelectionTool = null;
 // Variables du modal gérées dans src/modals/circularCutModal.js
 
 // Configuration du panneau principal et des découpes
@@ -74,36 +72,6 @@ const constraints = {
 };
 
 // Définition des matériaux disponibles (déplacée dans src/materials.js)
-
-/**
- * Met à jour l'interface utilisateur avec les informations de sélection
- * @param {Object|null} info - Informations sur la face sélectionnée ou null si aucune sélection
- */
-function updateSelectionUI(info) {
-  const container = document.getElementById('selection-info-container');
-  if (!container) return;
-
-  if (info) {
-    // Affichage des informations de la face sélectionnée
-    container.style.display = 'block';
-    
-    const faceTypeSpan = document.getElementById('selected-face-type');
-    const faceXSpan = document.getElementById('selected-face-x');
-    const faceYSpan = document.getElementById('selected-face-y');
-    const faceZSpan = document.getElementById('selected-face-z');
-    
-    if (faceTypeSpan) faceTypeSpan.textContent = info.type || 'Inconnue';
-    if (faceXSpan) faceXSpan.textContent = (info.position?.x || 0).toFixed(1);
-    if (faceYSpan) faceYSpan.textContent = (info.position?.y || 0).toFixed(1);
-    if (faceZSpan) faceZSpan.textContent = (info.position?.z || 0).toFixed(1);
-    
-    console.log('Face sélectionnée:', info);
-  } else {
-    // Masquage des informations si aucune sélection
-    container.style.display = 'none';
-    console.log('Aucune face sélectionnée');
-  }
-}
 
 /**
  * Calcule la taille optimale de la grille selon les dimensions du panneau
@@ -399,56 +367,6 @@ function updateThicknessOptions(material) {
 }
 
 /**
- * Initialise le système de sélection des faces
- */
-function initFaceSelection() {
-  const container = document.getElementById('scene-container');
-  faceSelectionTool = new FaceSelectionTool(
-    container,
-    camera,
-    controls,
-    (info) => updateSelectionUI(info),
-    () => updateSelectionUI(null)
-  );
-  if (currentPanelMesh) {
-    faceSelectionTool.setMesh(currentPanelMesh);
-  }
-  faceSelectionTool.enable();
-  console.log('Système de sélection des faces initialisé');
-}
-
-/**
- * Désélectionne la face actuelle
- */
-function deselectFace() {
-  if (faceSelectionTool) {
-    faceSelectionTool.deselect();
-  }
-}
-
-/**
- * Retourne les informations de la face actuellement sélectionnée
- * @returns {Object|null} Informations de la face sélectionnée
- */
-function getSelectedFace() {
-  return faceSelectionTool ? faceSelectionTool.getSelectedFace() : null;
-}
-
-/**
- * Active ou désactive le mode de sélection
- * @param {boolean} enabled - État du mode de sélection
- */
-function setSelectionMode(enabled) {
-  if (!faceSelectionTool) return;
-  if (enabled) {
-    faceSelectionTool.enable();
-  } else {
-    faceSelectionTool.disable();
-  }
-  console.log(`Mode de sélection ${enabled ? 'activé' : 'désactivé'}`);
-}
-
-/**
  * Initialisation de la scène Three.js
  */
 function initThreeJS() {
@@ -523,9 +441,6 @@ function initThreeJS() {
 
   // Labels des axes adaptatifs
   updateAxisLabels(config.panel);
-  
-  // Initialisation du système de sélection des faces
-  initFaceSelection();
 }
 
 /**
@@ -926,10 +841,6 @@ function initGridControls() {
 }
 
 /**
- * Initialise les contrôles du modal de découpe circulaire
- */
-
-/**
  * Fonction principale pour mettre à jour le panneau 3D avec les opérations CSG
  * @param {Object} panelConfig - Configuration du panneau et des découpes
  */
@@ -942,9 +853,6 @@ function updatePanel3D(panelConfig) {
       currentPanelMesh.material.dispose();
     }
   }
-  
-  // Désélection de la face si le modèle change
-  deselectFace();
   
   // Mise à jour de la grille selon les nouvelles dimensions du panneau
   updateGrid(panelConfig.panel);
@@ -960,9 +868,6 @@ function updatePanel3D(panelConfig) {
     
     // Ajout à la scène
     scene.add(currentPanelMesh);
-    if (faceSelectionTool) {
-      faceSelectionTool.setMesh(currentPanelMesh);
-    }
     
     // Mise à jour de la visualisation des arêtes
     updateEdgesVisualization(currentPanelMesh);
@@ -979,9 +884,6 @@ function updatePanel3D(panelConfig) {
     currentPanelMesh.castShadow = true;
     currentPanelMesh.receiveShadow = true;
     scene.add(currentPanelMesh);
-    if (faceSelectionTool) {
-      faceSelectionTool.setMesh(currentPanelMesh);
-    }
     
     // Mise à jour des arêtes même en cas d'erreur
     updateEdgesVisualization(currentPanelMesh);
@@ -1073,8 +975,5 @@ if (document.readyState === 'loading') {
 // Export des fonctions utiles pour les futures extensions
 window.updatePanel3D = updatePanel3D;
 window.config = config;
-window.getSelectedFace = getSelectedFace;
-window.setSelectionMode = setSelectionMode;
-window.deselectFace = deselectFace;
 window.toggleGrid = toggleGrid;
 window.updateGridSettings = updateGridSettings;

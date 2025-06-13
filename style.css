@@ -156,42 +156,6 @@ body {
   background-color: #218838;
 }
 
-/* Section d'information sur la sélection */
-.selection-info {
-  margin-bottom: 25px;
-  padding: 15px;
-  background: #e8f4fd;
-  border-radius: 8px;
-  border: 1px solid #bee5eb;
-  border-left: 4px solid #17a2b8;
-}
-
-.selection-info h3 {
-  color: #0c5460;
-  margin-bottom: 12px;
-  font-size: 1rem;
-}
-
-.selection-info p {
-  color: #0c5460;
-  font-size: 0.85rem;
-  margin-bottom: 8px;
-  line-height: 1.4;
-}
-
-.selection-info p:last-child {
-  margin-bottom: 0;
-}
-
-.selection-info strong {
-  font-weight: 600;
-}
-
-.selection-info em {
-  font-style: italic;
-  color: #6c757d;
-}
-
 .info {
   background: #e3f2fd;
   padding: 12px;
@@ -410,15 +374,6 @@ canvas {
 
 canvas:active {
   cursor: grabbing;
-}
-
-/* Curseur pour la sélection */
-#scene-container.selection-mode canvas {
-  cursor: crosshair;
-}
-
-#scene-container canvas:hover {
-  cursor: pointer;
 }
 
 .axis-label {
