@@ -76,6 +76,36 @@ const constraints = {
 // Définition des matériaux disponibles (déplacée dans src/materials.js)
 
 /**
+ * Met à jour l'interface utilisateur avec les informations de sélection
+ * @param {Object|null} info - Informations sur la face sélectionnée ou null si aucune sélection
+ */
+function updateSelectionUI(info) {
+  const container = document.getElementById('selection-info-container');
+  if (!container) return;
+
+  if (info) {
+    // Affichage des informations de la face sélectionnée
+    container.style.display = 'block';
+    
+    const faceTypeSpan = document.getElementById('selected-face-type');
+    const faceXSpan = document.getElementById('selected-face-x');
+    const faceYSpan = document.getElementById('selected-face-y');
+    const faceZSpan = document.getElementById('selected-face-z');
+    
+    if (faceTypeSpan) faceTypeSpan.textContent = info.type || 'Inconnue';
+    if (faceXSpan) faceXSpan.textContent = (info.position?.x || 0).toFixed(1);
+    if (faceYSpan) faceYSpan.textContent = (info.position?.y || 0).toFixed(1);
+    if (faceZSpan) faceZSpan.textContent = (info.position?.z || 0).toFixed(1);
+    
+    console.log('Face sélectionnée:', info);
+  } else {
+    // Masquage des informations si aucune sélection
+    container.style.display = 'none';
+    console.log('Aucune face sélectionnée');
+  }
+}
+
+/**
  * Calcule la taille optimale de la grille selon les dimensions du panneau
  * @param {Object} panelConfig - Configuration du panneau
  * @returns {Object} Configuration de grille optimale
