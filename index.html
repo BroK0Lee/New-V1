@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bibliothèque de Géométries 3D - CSG</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Conteneur pour le canvas Three.js -->
+      <div id="scene-container"></div>
+      
+      <!-- Interface utilisateur pour les contrôles -->
+      <div id="controls">
+        <h2>Contrôles de Géométrie</h2>
+        <div class="control-section">
+          <h3>Panneau Principal</h3>
+          
+          <div class="parameter-group">
+            <label for="panel-length">Longueur (mm):</label>
+            <input type="number" id="panel-length" value="1000" min="10" max="2500" step="1">
+            <small>Entre 10 et 2500mm</small>
+          </div>
+          
+          <div class="parameter-group">
+            <label for="panel-width">Largeur (mm):</label>
+            <input type="number" id="panel-width" value="500" min="10" max="1250" step="1">
+            <small>Entre 10 et 1250mm</small>
+          </div>
+          
+          <div class="parameter-group">
+            <label for="panel-material">Matériau:</label>
+            <select id="panel-material">
+              <option value="pine">Pin</option>
+              <option value="oak">Chêne</option>
+              <option value="birch">Bouleau</option>
+              <option value="mdf">MDF</option>
+              <option value="plywood">Contreplaqué</option>
+              <option value="melamine">Mélaminé</option>
+            </select>
+          </div>
+          
+          <div class="parameter-group">
+            <label for="panel-thickness">Épaisseur (mm):</label>
+            <select id="panel-thickness">
+              <!-- Options générées dynamiquement selon le matériau -->
+            </select>
+          </div>
+          
+          <button id="update-panel" class="update-button">Mettre à jour</button>
+        </div>
+        
+        <div class="control-section">
+          <h3>Découpes</h3>
+          <button id="open-circular-cut-modal" class="update-button">Ajouter une découpe circulaire</button>
+          <p style="margin-top: 15px; font-size: 0.85rem; color: #6c757d;">
+            <em>Autres types de découpes à venir...</em>
+          </p>
+        </div>
+        
+        <!-- Section d'information sur la sélection (générée dynamiquement) -->
+        
+        <div class="info">
+          <p><strong>Navigation:</strong> Clic gauche + glisser pour orbiter, molette pour zoomer</p>
+          <p><strong>Sélection:</strong> Cliquez sur une face du modèle pour la sélectionner</p>
+          <p><strong>Contraintes:</strong></p>
+          <ul>
+            <li>Longueur: 10-2500mm</li>
+            <li>Largeur: 10-1250mm</li>
+            <li>Épaisseurs selon matériau</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal pour découpe circulaire -->
+    <div id="circular-cut-modal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Nouvelle Découpe Circulaire</h3>
+          <button id="close-circular-cut-modal" class="modal-close-button">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-3d-display">
+            <div class="placeholder-content">
+              <p>Aperçu 3D</p>
+              <small>Zone d'affichage 3D à implémenter</small>
+            </div>
+          </div>
+          <div class="modal-parameters">
+            <h4>Paramètres de la découpe</h4>
+            <div class="parameter-group">
+              <label for="cut-radius">Rayon (mm):</label>
+              <input type="number" id="cut-radius" value="25" min="1" max="500" step="0.1">
+              <small>Rayon du trou circulaire</small>
+            </div>
+            <div class="parameter-group">
+              <label for="cut-depth">Profondeur (mm):</label>
+              <input type="number" id="cut-depth" value="18" min="1" max="100" step="0.1">
+              <small>Profondeur de perçage</small>
+            </div>
+            <div class="parameter-group">
+              <label for="cut-position-x">Position X (mm):</label>
+              <input type="number" id="cut-position-x" value="0" step="0.1">
+              <small>Position horizontale</small>
+            </div>
+            <div class="parameter-group">
+              <label for="cut-position-z">Position Z (mm):</label>
+              <input type="number" id="cut-position-z" value="0" step="0.1">
+              <small>Position verticale</small>
+            </div>
+            <div class="modal-actions">
+              <button id="preview-cut" class="update-button" style="background-color: #28a745;">Aperçu</button>
+              <button id="apply-cut" class="update-button">Appliquer</button>
+              <button id="cancel-cut" class="update-button" style="background-color: #6c757d;">Annuler</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
