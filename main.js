@@ -4,7 +4,6 @@
  */
 
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { createPanelGeometry } from './src/models/index.js';
 import { materials, constraints } from './src/materials.js';
@@ -36,6 +35,16 @@ import {
   updatePanelConfig,
   disposeViewCube
 } from './src/Tools/viewCube.js';
+import {
+  initCamera,
+  updateCameraForPanel,
+  updateCameraControls,
+  resizeCamera,
+  setControlsCanvas,
+  getCamera,
+  getControls,
+  disposeCamera
+} from './src/Tools/cameraManager.js';
 
 // Variables globales pour la scène Three.js
 let scene, camera, renderer, controls, labelRenderer;
@@ -45,63 +54,6 @@ let currentPanelMesh = null;
 
 // Configuration du panneau principal et des découpes - importée depuis src/config.js
 const config = { ...defaultConfig };
-
-/**
- * Calcule la position optimale de la caméra en fonction des dimensions du panneau
- * @param {Object} panelConfig - Configuration du panneau
- * @returns {Object} Position et paramètres de caméra optimaux
- */
-function calculateOptimalCameraSettings(panelConfig) {
-  const { length, width, thickness } = panelConfig;
-  
-  // Calcul de la diagonale du panneau pour déterminer la distance optimale
-  const diagonal = Math.sqrt(length * length + width * width + thickness * thickness);
-  
-  // Distance de la caméra basée sur la diagonale avec un facteur de sécurité
-  const cameraDistance = Math.max(diagonal * 1.5, 300); // Minimum 300 pour les très petits objets
-  
-  // Limites de zoom adaptatives
-  const minDistance = Math.max(diagonal * 0.1, 10);  // Zoom minimum adaptatif
-  const maxDistance = Math.max(diagonal * 5, 1000);  // Zoom maximum adaptatif
-  
-  return {
-    distance: cameraDistance,
-    minDistance: minDistance,
-    maxDistance: maxDistance,
-    position: {
-      x: cameraDistance * 0.7,
-      y: cameraDistance * 0.7,
-      z: cameraDistance * 0.7
-    }
-  };
-}
-
-/**
- * Met à jour la position et les limites de la caméra
- * @param {Object} panelConfig - Configuration du panneau
- */
-function updateCameraSettings(panelConfig) {
-  const cameraSettings = calculateOptimalCameraSettings(panelConfig);
-  
-  // Mise à jour de la position de la caméra
-  camera.position.set(
-    cameraSettings.position.x,
-    cameraSettings.position.y,
-    cameraSettings.position.z
-  );
-  
-  // Mise à jour des limites des contrôles
-  if (controls) {
-    controls.minDistance = cameraSettings.minDistance;
-    controls.maxDistance = cameraSettings.maxDistance;
-    
-    // Recentrage sur l'objet
-    controls.target.set(0, panelConfig.thickness / 2, 0);
-    controls.update();
-  }
-  
-  console.log(`Caméra mise à jour - Distance: ${cameraSettings.distance.toFixed(0)}mm, Zoom: ${cameraSettings.minDistance.toFixed(0)}-${cameraSettings.maxDistance.toFixed(0)}mm`);
-}
 
 /**
  * Valide les dimensions du panneau selon les contraintes
@@ -175,13 +127,8 @@ function initThreeJS() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf0f0f0);
   
-  // Configuration de la caméra perspective avec paramètres adaptatifs
+  // Récupération du conteneur
   const container = document.getElementById('scene-container');
-  const aspect = container.clientWidth / container.clientHeight;
-  camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 10000); // Augmentation du far plane
-  
-  // Position initiale de la caméra basée sur la configuration par défaut
-  updateCameraSettings(config.panel);
   
   // Création du renderer
   renderer = new THREE.WebGLRenderer({ 
@@ -197,6 +144,14 @@ function initThreeJS() {
   // Ajout du canvas au conteneur
   container.appendChild(renderer.domElement);
 
+  // Initialisation de la caméra et des contrôles via le module cameraManager
+  const cameraData = initCamera(container, config.panel);
+  camera = cameraData.camera;
+  controls = cameraData.controls;
+  
+  // Configuration du canvas pour les contrôles
+  setControlsCanvas(renderer.domElement);
+
   // Renderer pour les labels CSS2D
   labelRenderer = new CSS2DRenderer();
   labelRenderer.setSize(container.clientWidth, container.clientHeight);
@@ -205,15 +160,6 @@ function initThreeJS() {
   labelRenderer.domElement.style.pointerEvents = 'none';
   container.appendChild(labelRenderer.domElement);
 
-  // Configuration des contrôles orbit avec paramètres adaptatifs
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
-  controls.maxPolarAngle = Math.PI;
-  
-  // Les limites de distance seront définies par updateCameraSettings
-  updateCameraSettings(config.panel);
-  
   // Initialisation du cube de visualisation
   initViewCube(container, camera, controls, config.panel);
   
@@ -315,8 +261,8 @@ function initUIControls() {
     // Mise à jour de la configuration du panneau pour le cube de visualisation
     updatePanelConfig(config.panel);
 
-    // Mise à jour de la caméra selon les nouvelles dimensions
-    updateCameraSettings(config.panel);
+    // Mise à jour de la caméra selon les nouvelles dimensions via le module cameraManager
+    updateCameraForPanel(config.panel);
 
     // Mise à jour du panneau 3D
     updatePanel3D(config);
@@ -485,8 +431,8 @@ function updatePanel3D(panelConfig) {
 function animate() {
   requestAnimationFrame(animate);
   
-  // Mise à jour des contrôles
-  controls.update();
+  // Mise à jour des contrôles de caméra via le module cameraManager
+  updateCameraControls();
   
   // Rendu de la scène
   renderer.render(scene, camera);
@@ -507,8 +453,8 @@ function handleWindowResize() {
   const width = container.clientWidth;
   const height = container.clientHeight;
   
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
+  // Redimensionnement de la caméra via le module cameraManager
+  resizeCamera(width, height);
   
   renderer.setSize(width, height);
   labelRenderer.setSize(width, height);  
@@ -564,3 +510,5 @@ window.updatePanel3D = updatePanel3D;
 window.config = config;
 window.toggleGrid = toggleGridDisplay;
 window.updateGridSettings = updateGridSettingsWrapper;
+window.getCamera = getCamera;
+window.getControls = getControls;
