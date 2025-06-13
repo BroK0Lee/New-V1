@@ -7,12 +7,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
-import { ADDITION, SUBTRACTION, INTERSECTION, Brush, Evaluator } from 'three-bvh-csg';
-import {
-  createPanelGeometry,
-  createCylinderGeometryForHole,
-  createBoxGeometryForRectangularCut
-} from './src/models/index.js';
+import { createPanelGeometry } from './src/models/index.js';
 import { materials } from './src/materials.js';
 import {
   initCircularCutModal,
@@ -21,6 +16,7 @@ import {
   getModalRenderer
 } from './src/modals/circularCutModal.js';
 import { FaceSelectionTool } from "./src/Tools/faceSelectionTool.js";
+import { CSGManager } from './src/csg/CSGManager.ts';
 
 // Variables globales pour la scène Three.js
 let scene, camera, renderer, controls, labelRenderer;
@@ -930,70 +926,7 @@ function updatePanel3D(panelConfig) {
   updateAxisLabels(panelConfig.panel);
   
   try {
-    // Création du panneau principal
-    const panelGeometry = createPanelGeometry(panelConfig.panel);
-    
-    // Sélection du matériau selon le choix de l'utilisateur
-    const selectedMaterial = materials[panelConfig.panel.material] || materials.pine;
-    const panelMaterial = new THREE.MeshLambertMaterial({
-      color: selectedMaterial.color,
-      transparent: true,
-      opacity: 0.9
-    });
-    
-    // Création du brush principal pour les opérations CSG
-    let mainBrush = new Brush(panelGeometry, panelMaterial);
-    mainBrush.updateMatrixWorld();
-    
-    // Evaluateur CSG pour les opérations booléennes
-    const csgEvaluator = new Evaluator();
-    
-    // Application des découpes (si elles existent)
-    for (const cut of panelConfig.cuts) {
-      let cutGeometry;
-      
-      // Sélection du type de découpe
-      switch (cut.type) {
-        case 'circular':
-          cutGeometry = createCylinderGeometryForHole(cut.params);
-          break;
-        case 'rectangular':
-          cutGeometry = createBoxGeometryForRectangularCut(cut.params);
-          break;
-        default:
-          console.warn(`Type de découpe non reconnu: ${cut.type}`);
-          continue;
-      }
-      
-      // Création du brush de découpe
-      const cutBrush = new Brush(cutGeometry);
-      
-      // Positionnement de la découpe
-      if (cut.position) {
-        cutBrush.position.set(cut.position.x || 0, cut.position.y || 0, cut.position.z || 0);
-      }
-      if (cut.rotation) {
-        cutBrush.rotation.set(cut.rotation.x || 0, cut.rotation.y || 0, cut.rotation.z || 0);
-      }
-      
-      cutBrush.updateMatrixWorld();
-      
-      // Opération de soustraction CSG
-      const result = csgEvaluator.evaluate(mainBrush, cutBrush, SUBTRACTION);
-      
-      // Mise à jour du brush principal avec le résultat
-      mainBrush = result;
-    }
-    
-    // Création du mesh final
-    currentPanelMesh = mainBrush;
-    currentPanelMesh.castShadow = true;
-    currentPanelMesh.receiveShadow = true;
-    
-    // Recalcul des normales pour un rendu correct
-    if (currentPanelMesh.geometry) {
-      currentPanelMesh.geometry.computeVertexNormals();
-    }
+    currentPanelMesh = CSGManager.applyCuts(panelConfig);
     
     // Ajout à la scène
     scene.add(currentPanelMesh);
