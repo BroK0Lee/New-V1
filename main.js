@@ -20,93 +20,7 @@ import {
   getModalCamera,
   getModalRenderer
 } from './src/modals/circularCutModal.js';
-
-// Classe pour la mise en évidence des surfaces
-class SurfaceHighlighter {
-  constructor() {
-    this.originalMaterials = new Map();
-    this.highlightMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff6600,
-      transparent: true,
-      opacity: 0.8
-    });
-  }
-
-  highlightSurface(mesh, faceIndex) {
-    // Restaurer l'état précédent
-    this.clearHighlight();
-    
-    // Sauvegarder le matériau original
-    this.originalMaterials.set(mesh, mesh.material.clone());
-    
-    // Créer un nouveau matériau avec highlight pour la face sélectionnée
-    const geometry = mesh.geometry;
-    const positionAttribute = geometry.attributes.position;
-    const colors = new Float32Array(positionAttribute.count * 3);
-    
-    // Colorier toutes les faces avec la couleur originale du matériau
-    const originalColor = mesh.material.color;
-    for (let i = 0; i < colors.length; i += 3) {
-      colors[i] = originalColor.r;     // R
-      colors[i + 1] = originalColor.g; // G  
-      colors[i + 2] = originalColor.b; // B
-    }
-    
-    // Pour une BoxGeometry, chaque face est composée de 2 triangles
-    // Chaque triangle a 3 vertices, donc 6 vertices par face
-    // Il faut identifier quels vertices appartiennent à la face sélectionnée
-    
-    // Calculer l'index du triangle dans la géométrie
-    const triangleIndex = Math.floor(faceIndex / 2); // 2 triangles par face
-    const faceGroupIndex = Math.floor(triangleIndex / 2); // 2 triangles par face de cube
-    
-    // Pour une BoxGeometry, les faces sont organisées par groupes de 2 triangles
-    // Chaque face du cube = 4 vertices formant 2 triangles
-    const verticesPerTriangle = 3;
-    const trianglesPerFace = 2;
-    const verticesPerFace = verticesPerTriangle * trianglesPerFace; // 6 vertices
-    
-    // Calculer l'index de départ pour cette face
-    const startVertexIndex = faceGroupIndex * verticesPerFace;
-    
-    // Colorier tous les vertices de cette face en orange
-    for (let i = 0; i < verticesPerFace && (startVertexIndex + i) < positionAttribute.count; i++) {
-      const vertexIndex = startVertexIndex + i;
-      const colorIndex = vertexIndex * 3;
-      
-      if (colorIndex < colors.length) {
-        colors[colorIndex] = 1.0;     // R (orange)
-        colors[colorIndex + 1] = 0.4; // G
-        colors[colorIndex + 2] = 0.0; // B
-      }
-    }
-    
-    // Appliquer les couleurs à la géométrie
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    
-    // Créer un nouveau matériau qui utilise les vertex colors
-    mesh.material = new THREE.MeshLambertMaterial({ 
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.9
-    });
-  }
-
-  clearHighlight() {
-    this.originalMaterials.forEach((material, mesh) => {
-      mesh.material = material;
-      if (mesh.geometry.attributes.color) {
-        mesh.geometry.deleteAttribute('color');
-      }
-    });
-    this.originalMaterials.clear();
-  }
-
-  dispose() {
-    this.clearHighlight();
-    this.highlightMaterial.dispose();
-  }
-}
+import { FaceSelectionTool } from "./src/Tools/faceSelectionTool.js";
 
 // Variables globales pour la scène Three.js
 let scene, camera, renderer, controls, labelRenderer;
@@ -120,13 +34,7 @@ let gridHelper = null; // Référence à la grille pour pouvoir la repositionner
 let xLabelObj = null, yLabelObj = null, zLabelObj = null; // Références aux labels des axes
 let axesHelper = null; // Référence aux axes pour pouvoir les redimensionner
 
-// Variables pour la sélection des faces
-let raycaster = null;
-let mouse = new THREE.Vector2();
-let selectedFace = null;
-let surfaceHighlighter = null; // Instance du SurfaceHighlighter
-let isSelectionMode = false;
-
+let faceSelectionTool = null;
 // Variables du modal gérées dans src/modals/circularCutModal.js
 
 // Configuration du panneau principal et des découpes
@@ -205,7 +113,6 @@ function updateGrid(panelConfig) {
   // Suppression de l'ancienne grille
   if (gridHelper) {
     scene.remove(gridHelper);
-    
     // Dispose properly of all child geometries and materials
     gridHelper.children.forEach(child => {
       if (child.geometry) {
@@ -215,7 +122,6 @@ function updateGrid(panelConfig) {
         child.material.dispose();
       }
     });
-    
     gridHelper = null;
   }
   
@@ -470,212 +376,27 @@ function updateThicknessOptions(material) {
  * Initialise le système de sélection des faces
  */
 function initFaceSelection() {
-  // Création du raycaster pour la détection des intersections
-  raycaster = new THREE.Raycaster();
-  
-  // Initialisation du SurfaceHighlighter
-  surfaceHighlighter = new SurfaceHighlighter();
-  
-  // Événements de souris pour la sélection
   const container = document.getElementById('scene-container');
-  
-  container.addEventListener('click', onMouseClick, false);
-  container.addEventListener('mousemove', onMouseMove, false);
-  
+  faceSelectionTool = new FaceSelectionTool(
+    container,
+    camera,
+    controls,
+    (info) => updateSelectionUI(info),
+    () => updateSelectionUI(null)
+  );
+  if (currentPanelMesh) {
+    faceSelectionTool.setMesh(currentPanelMesh);
+  }
+  faceSelectionTool.enable();
   console.log('Système de sélection des faces initialisé');
-}
-
-/**
- * Gère les clics de souris pour la sélection des faces
- * @param {MouseEvent} event - Événement de clic
- */
-function onMouseClick(event) {
-  // Vérifier si on n'est pas en train de faire glisser la caméra
-  if (controls.enabled === false) return;
-  
-  // Calcul des coordonnées normalisées de la souris
-  const container = document.getElementById('scene-container');
-  const rect = container.getBoundingClientRect();
-  
-  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-  
-  // Mise à jour du raycaster
-  raycaster.setFromCamera(mouse, camera);
-  
-  // Vérification des intersections avec le panneau
-  if (currentPanelMesh) {
-    const intersects = raycaster.intersectObject(currentPanelMesh, false);
-    
-    if (intersects.length > 0) {
-      const intersection = intersects[0];
-      selectFace(intersection);
-    } else {
-      // Clic dans le vide - désélection
-      deselectFace();
-    }
-  }
-}
-
-/**
- * Gère le mouvement de la souris pour le survol des faces
- * @param {MouseEvent} event - Événement de mouvement
- */
-function onMouseMove(event) {
-  // Calcul des coordonnées normalisées de la souris
-  const container = document.getElementById('scene-container');
-  const rect = container.getBoundingClientRect();
-  
-  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-  
-  // Mise à jour du raycaster
-  raycaster.setFromCamera(mouse, camera);
-  
-  // Vérification des intersections pour le survol
-  if (currentPanelMesh) {
-    const intersects = raycaster.intersectObject(currentPanelMesh, false);
-    
-    if (intersects.length > 0) {
-      // Changement du curseur pour indiquer qu'on peut cliquer
-      container.style.cursor = 'pointer';
-    } else {
-      // Restauration du curseur normal
-      container.style.cursor = 'default';
-    }
-  }
-}
-
-/**
- * Sélectionne une face et la met en évidence
- * @param {Object} intersection - Intersection retournée par le raycaster
- */
-function selectFace(intersection) {
-  const faceIndex = intersection.faceIndex;
-  const point = intersection.point;
-  const normal = intersection.face.normal.clone();
-  
-  // Transformation de la normale dans l'espace monde
-  normal.transformDirection(currentPanelMesh.matrixWorld);
-  
-  // Identification du type de face basé sur la normale
-  const faceType = identifyFaceType(normal);
-  
-  // Stockage des informations de la face sélectionnée
-  selectedFace = {
-    faceIndex: faceIndex,
-    point: point.clone(),
-    normal: normal.clone(),
-    type: faceType,
-    mesh: currentPanelMesh
-  };
-  
-  // Mise en évidence visuelle de la face avec le SurfaceHighlighter
-  surfaceHighlighter.highlightSurface(currentPanelMesh, faceIndex);
-  
-  // Mise à jour de l'interface utilisateur
-  updateSelectionUI(selectedFace);
-  
-  console.log(`Face sélectionnée: ${faceType} à la position`, point);
-}
-
-/**
- * Identifie le type de face basé sur sa normale
- * @param {THREE.Vector3} normal - Normale de la face
- * @returns {string} Type de face
- */
-function identifyFaceType(normal) {
-  const threshold = 0.9; // Seuil pour déterminer l'alignement avec les axes
-  
-  // Normalisation de la normale
-  const n = normal.clone().normalize();
-  
-  // Vérification de l'alignement avec les axes principaux
-  if (Math.abs(n.x) > threshold) {
-    return n.x > 0 ? 'face-droite' : 'face-gauche';
-  } else if (Math.abs(n.y) > threshold) {
-    return n.y > 0 ? 'face-dessus' : 'face-dessous';
-  } else if (Math.abs(n.z) > threshold) {
-    return n.z > 0 ? 'face-avant' : 'face-arriere';
-  }
-  
-  return 'face-inconnue';
 }
 
 /**
  * Désélectionne la face actuelle
  */
 function deselectFace() {
-  selectedFace = null;
-  
-  // Suppression de la mise en évidence
-  if (surfaceHighlighter) {
-    surfaceHighlighter.clearHighlight();
-  }
-  
-  updateSelectionUI(null);
-  
-  console.log('Face désélectionnée');
-}
-
-/**
- * Met à jour l'interface utilisateur selon la sélection
- * @param {Object|null} faceInfo - Informations sur la face sélectionnée
- */
-function updateSelectionUI(faceInfo) {
-  // Récupération ou création de l'élément d'information de sélection
-  let selectionInfo = document.getElementById('selection-info');
-  
-  if (!selectionInfo) {
-    selectionInfo = document.createElement('div');
-    selectionInfo.id = 'selection-info';
-    selectionInfo.className = 'selection-info';
-    
-    // Ajout après la section des découpes
-    const cutsSection = document.querySelector('.control-section:nth-child(2)');
-    cutsSection.parentNode.insertBefore(selectionInfo, cutsSection.nextSibling);
-  }
-  
-  if (faceInfo) {
-    // Affichage des informations de la face sélectionnée
-    const faceNames = {
-      'face-droite': 'Face droite (+X)',
-      'face-gauche': 'Face gauche (-X)',
-      'face-dessus': 'Face dessus (+Y)',
-      'face-dessous': 'Face dessous (-Y)',
-      'face-avant': 'Face avant (+Z)',
-      'face-arriere': 'Face arrière (-Z)',
-      'face-inconnue': 'Face inconnue'
-    };
-    
-    const faceName = faceNames[faceInfo.type] || faceInfo.type;
-    
-    selectionInfo.innerHTML = `
-      <h3>Face Sélectionnée</h3>
-      <p><strong>Type:</strong> ${faceName}</p>
-      <p><strong>Position:</strong> 
-        X: ${faceInfo.point.x.toFixed(1)}mm, 
-        Y: ${faceInfo.point.y.toFixed(1)}mm, 
-        Z: ${faceInfo.point.z.toFixed(1)}mm
-      </p>
-      <p><strong>Normale:</strong> 
-        X: ${faceInfo.normal.x.toFixed(2)}, 
-        Y: ${faceInfo.normal.y.toFixed(2)}, 
-        Z: ${faceInfo.normal.z.toFixed(2)}
-      </p>
-      <button id="deselect-face" class="update-button" style="margin-top: 10px;">Désélectionner</button>
-    `;
-    
-    // Ajout de l'événement de désélection
-    document.getElementById('deselect-face').addEventListener('click', deselectFace);
-    
-  } else {
-    // Masquage des informations de sélection
-    selectionInfo.innerHTML = `
-      <h3>Sélection de Face</h3>
-      <p>Cliquez sur une face du modèle pour la sélectionner.</p>
-      <p><em>La sélection sera utilisée pour les futures opérations de découpe.</em></p>
-    `;
+  if (faceSelectionTool) {
+    faceSelectionTool.deselect();
   }
 }
 
@@ -684,7 +405,7 @@ function updateSelectionUI(faceInfo) {
  * @returns {Object|null} Informations de la face sélectionnée
  */
 function getSelectedFace() {
-  return selectedFace;
+  return faceSelectionTool ? faceSelectionTool.getSelectedFace() : null;
 }
 
 /**
@@ -692,18 +413,14 @@ function getSelectedFace() {
  * @param {boolean} enabled - État du mode de sélection
  */
 function setSelectionMode(enabled) {
-  isSelectionMode = enabled;
-  
-  if (!enabled) {
-    deselectFace();
+  if (!faceSelectionTool) return;
+  if (enabled) {
+    faceSelectionTool.enable();
+  } else {
+    faceSelectionTool.disable();
   }
-  
   console.log(`Mode de sélection ${enabled ? 'activé' : 'désactivé'}`);
 }
-
-/**
- * Initialise la scène 3D pour le modal de découpe circulaire
- */
 
 /**
  * Initialisation de la scène Three.js
@@ -1280,6 +997,9 @@ function updatePanel3D(panelConfig) {
     
     // Ajout à la scène
     scene.add(currentPanelMesh);
+    if (faceSelectionTool) {
+      faceSelectionTool.setMesh(currentPanelMesh);
+    }
     
     // Mise à jour de la visualisation des arêtes
     updateEdgesVisualization(currentPanelMesh);
@@ -1296,6 +1016,9 @@ function updatePanel3D(panelConfig) {
     currentPanelMesh.castShadow = true;
     currentPanelMesh.receiveShadow = true;
     scene.add(currentPanelMesh);
+    if (faceSelectionTool) {
+      faceSelectionTool.setMesh(currentPanelMesh);
+    }
     
     // Mise à jour des arêtes même en cas d'erreur
     updateEdgesVisualization(currentPanelMesh);
