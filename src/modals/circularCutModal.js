@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createPanelGeometry, createCylinderGeometryForHole } from '../models/index.js';
 import { materials } from '../materials.js';
+import { updateAxesAndLabels, disposeAxes } from '../Tools/axesHelper.js';
 
 let modalScene = null;
 let modalCamera = null;
@@ -40,6 +41,15 @@ function initModalScene(config) {
   modalControls.maxDistance = 500;
 
   setupModalLighting();
+  
+  // Ajout des axes avec labels dans le modal
+  const previewPanelConfig = {
+    length: Math.min(cfg.panel.length * 0.3, 200),
+    width: Math.min(cfg.panel.width * 0.3, 100),
+    thickness: cfg.panel.thickness
+  };
+  updateAxesAndLabels(previewPanelConfig, modalScene);
+  
   updateModalPreview();
 }
 
@@ -126,6 +136,9 @@ function updateModalPreview() {
 
   modalControls.target.set(0, previewPanelConfig.thickness / 2, 0);
   modalControls.update();
+  
+  // Mise à jour des axes après changement du modèle
+  updateAxesAndLabels(previewPanelConfig, modalScene);
 }
 
 function animateModal() {
@@ -148,6 +161,11 @@ function cleanupModalScene() {
     modalCutMesh.geometry.dispose();
     modalCutMesh.material.dispose();
     modalCutMesh = null;
+  }
+
+  // Nettoyage des axes du modal
+  if (modalScene) {
+    disposeAxes(modalScene);
   }
 
   if (modalRenderer) {
@@ -218,7 +236,7 @@ function initCircularCutModal(config) {
   });
 
   applyButton.addEventListener('click', () => {
-    // TODO: appliquer la d\u00e9coupe au panneau principal
+    // TODO: appliquer la découpe au panneau principal
     closeModal();
   });
 }

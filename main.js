@@ -24,6 +24,12 @@ import {
   calculateOptimalGridSize,
   disposeGrid
 } from './src/Tools/grid.js';
+import {
+  updateAxes,
+  updateAxisLabels,
+  updateAxesAndLabels,
+  disposeAxes
+} from './src/Tools/axesHelper.js';
 
 // Variables globales pour la scène Three.js
 let scene, camera, renderer, controls, labelRenderer;
@@ -32,8 +38,6 @@ let isDraggingCube = false;
 let lastCubePointer = new THREE.Vector2();
 let cubeOffsetQuat = new THREE.Quaternion();
 let currentPanelMesh = null;
-let xLabelObj = null, yLabelObj = null, zLabelObj = null; // Références aux labels des axes
-let axesHelper = null; // Référence aux axes pour pouvoir les redimensionner
 
 // Variables du modal gérées dans src/modals/circularCutModal.js
 
@@ -233,68 +237,8 @@ function initThreeJS() {
   // Éclairage de la scène
   setupLighting();
   
-  // Axes de référence adaptatifs
-  updateAxes(config.panel);
-
-  // Labels des axes adaptatifs
-  updateAxisLabels(config.panel);
-}
-
-/**
- * Met à jour les axes en fonction des dimensions du panneau
- * @param {Object} panelConfig - Configuration du panneau
- */
-function updateAxes(panelConfig) {
-  // Suppression des anciens axes
-  if (axesHelper) {
-    scene.remove(axesHelper);
-  }
-  
-  // Calcul de la taille des axes basée sur les dimensions du panneau
-  const maxDimension = Math.max(panelConfig.length, panelConfig.width, panelConfig.thickness);
-  const axesSize = Math.max(maxDimension * 0.7, 140); // 70% de la plus grande dimension, minimum 140
-  
-  // Création des nouveaux axes
-  axesHelper = new THREE.AxesHelper(axesSize);
-  scene.add(axesHelper);
-}
-
-/**
- * Met à jour les labels des axes en fonction des dimensions du panneau
- * @param {Object} panelConfig - Configuration du panneau
- */
-function updateAxisLabels(panelConfig) {
-  // Suppression des anciens labels
-  if (xLabelObj) {
-    scene.remove(xLabelObj);
-    xLabelObj = null;
-  }
-  if (yLabelObj) {
-    scene.remove(yLabelObj);
-    yLabelObj = null;
-  }
-  if (zLabelObj) {
-    scene.remove(zLabelObj);
-    zLabelObj = null;
-  }
-  
-  // Calcul des nouvelles positions basées sur les dimensions du panneau
-  const xPosition = (panelConfig.length / 2) + 300; // Position X basée sur la longueur + décalage
-  const yPosition = (panelConfig.thickness / 2) + 800; // Position Y basée sur l'épaisseur + décalage
-  const zPosition = (panelConfig.width / 2) + 550; // Position Z basée sur la largeur + décalage
-  
-  // Création des nouveaux labels
-  xLabelObj = createAxisLabel('X');
-  xLabelObj.position.set(xPosition, 0, 0);
-  
-  yLabelObj = createAxisLabel('Y');
-  yLabelObj.position.set(0, yPosition, 0);
-  
-  zLabelObj = createAxisLabel('Z');
-  zLabelObj.position.set(0, 0, zPosition);
-  
-  // Ajout des labels à la scène
-  scene.add(xLabelObj, yLabelObj, zLabelObj);
+  // Axes de référence adaptatifs et leurs labels
+  updateAxesAndLabels(config.panel, scene);
 }
 
 /**
@@ -323,18 +267,6 @@ function setupLighting() {
   const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
   fillLight.position.set(-50, 50, -50);
   scene.add(fillLight);
-}
-
-/**
- * Crée un label pour un axe
- * @param {string} text - Texte du label
- * @returns {CSS2DObject}
- */
-function createAxisLabel(text) {
-  const div = document.createElement('div');
-  div.className = 'axis-label';
-  div.textContent = text;
-  return new CSS2DObject(div);
 }
 
 /**
@@ -609,11 +541,8 @@ function updatePanel3D(panelConfig) {
   // Mise à jour de la grille selon les nouvelles dimensions du panneau
   updateGrid(panelConfig.panel, config.grid, scene);
   
-  // Mise à jour des axes selon les nouvelles dimensions du panneau
-  updateAxes(panelConfig.panel);
-  
-  // Mise à jour des labels des axes selon les nouvelles dimensions du panneau
-  updateAxisLabels(panelConfig.panel);
+  // Mise à jour des axes et leurs labels selon les nouvelles dimensions du panneau
+  updateAxesAndLabels(panelConfig.panel, scene);
   
   try {
     currentPanelMesh = CSGManager.applyCuts(panelConfig);
