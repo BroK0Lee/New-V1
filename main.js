@@ -8,11 +8,18 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import { ADDITION, SUBTRACTION, INTERSECTION, Brush, Evaluator } from 'three-bvh-csg';
-import { 
-  createPanelGeometry, 
-  createCylinderGeometryForHole, 
-  createBoxGeometryForRectangularCut 
+import {
+  createPanelGeometry,
+  createCylinderGeometryForHole,
+  createBoxGeometryForRectangularCut
 } from './src/models/index.js';
+import { materials } from './src/materials.js';
+import {
+  initCircularCutModal,
+  animateModal,
+  getModalCamera,
+  getModalRenderer
+} from './src/modals/circularCutModal.js';
 
 // Classe pour la mise en évidence des surfaces
 class SurfaceHighlighter {
@@ -120,13 +127,7 @@ let selectedFace = null;
 let surfaceHighlighter = null; // Instance du SurfaceHighlighter
 let isSelectionMode = false;
 
-// Variables pour le modal de découpe circulaire
-let modalScene = null;
-let modalCamera = null;
-let modalRenderer = null;
-let modalControls = null;
-let modalPanelMesh = null;
-let modalCutMesh = null;
+// Variables du modal gérées dans src/modals/circularCutModal.js
 
 // Configuration du panneau principal et des découpes
 const config = {
@@ -168,15 +169,7 @@ const constraints = {
   }
 };
 
-// Définition des matériaux disponibles
-const materials = {
-  pine: { color: 0xdeb887, name: 'Pin' },
-  oak: { color: 0x8b4513, name: 'Chêne' },
-  birch: { color: 0xf5deb3, name: 'Bouleau' },
-  mdf: { color: 0xd2b48c, name: 'MDF' },
-  plywood: { color: 0xdaa520, name: 'Contreplaqué' },
-  melamine: { color: 0xffffff, name: 'Mélaminé' }
-};
+// Définition des matériaux disponibles (déplacée dans src/materials.js)
 
 /**
  * Calcule la taille optimale de la grille selon les dimensions du panneau
@@ -711,203 +704,6 @@ function setSelectionMode(enabled) {
 /**
  * Initialise la scène 3D pour le modal de découpe circulaire
  */
-function initModalScene() {
-  const modalContainer = document.querySelector('.modal-3d-display');
-  
-  // Suppression du contenu placeholder
-  modalContainer.innerHTML = '';
-  
-  // Création de la scène du modal
-  modalScene = new THREE.Scene();
-  modalScene.background = new THREE.Color(0xf0f0f0);
-  
-  // Configuration de la caméra du modal
-  const aspect = modalContainer.clientWidth / modalContainer.clientHeight;
-  modalCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-  modalCamera.position.set(150, 150, 150);
-  
-  // Création du renderer du modal
-  modalRenderer = new THREE.WebGLRenderer({ 
-    antialias: true,
-    alpha: true 
-  });
-  modalRenderer.setSize(modalContainer.clientWidth, modalContainer.clientHeight);
-  modalRenderer.setPixelRatio(window.devicePixelRatio);
-  modalRenderer.shadowMap.enabled = true;
-  modalRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  modalRenderer.outputColorSpace = THREE.SRGBColorSpace;
-  
-  // Ajout du canvas au conteneur du modal
-  modalContainer.appendChild(modalRenderer.domElement);
-  
-  // Configuration des contrôles du modal
-  modalControls = new OrbitControls(modalCamera, modalRenderer.domElement);
-  modalControls.enableDamping = true;
-  modalControls.dampingFactor = 0.05;
-  modalControls.target.set(0, 10, 0);
-  modalControls.minDistance = 50;
-  modalControls.maxDistance = 500;
-  
-  // Éclairage de la scène du modal
-  setupModalLighting();
-  
-  // Création du panneau initial dans le modal
-  updateModalPreview();
-  
-  console.log('Scène 3D du modal initialisée');
-}
-
-/**
- * Configuration de l'éclairage pour la scène du modal
- */
-function setupModalLighting() {
-  // Lumière ambiante
-  const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
-  modalScene.add(ambientLight);
-  
-  // Lumière directionnelle
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  directionalLight.position.set(50, 50, 25);
-  directionalLight.castShadow = true;
-  directionalLight.shadow.mapSize.width = 1024;
-  directionalLight.shadow.mapSize.height = 1024;
-  directionalLight.shadow.camera.near = 0.5;
-  directionalLight.shadow.camera.far = 200;
-  directionalLight.shadow.camera.left = -100;
-  directionalLight.shadow.camera.right = 100;
-  directionalLight.shadow.camera.top = 100;
-  directionalLight.shadow.camera.bottom = -100;
-  modalScene.add(directionalLight);
-  
-  // Lumière d'appoint
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-  fillLight.position.set(-25, 25, -25);
-  modalScene.add(fillLight);
-}
-
-/**
- * Met à jour l'aperçu 3D dans le modal
- */
-function updateModalPreview() {
-  // Suppression des anciens meshes
-  if (modalPanelMesh) {
-    modalScene.remove(modalPanelMesh);
-    modalPanelMesh.geometry.dispose();
-    modalPanelMesh.material.dispose();
-    modalPanelMesh = null;
-  }
-  
-  if (modalCutMesh) {
-    modalScene.remove(modalCutMesh);
-    modalCutMesh.geometry.dispose();
-    modalCutMesh.material.dispose();
-    modalCutMesh = null;
-  }
-  
-  try {
-    // Création d'un panneau réduit pour l'aperçu
-    const previewPanelConfig = {
-      length: Math.min(config.panel.length * 0.3, 200),
-      width: Math.min(config.panel.width * 0.3, 100),
-      thickness: config.panel.thickness
-    };
-    
-    // Création du panneau d'aperçu
-    const panelGeometry = createPanelGeometry(previewPanelConfig);
-    const selectedMaterial = materials[config.panel.material] || materials.pine;
-    const panelMaterial = new THREE.MeshLambertMaterial({
-      color: selectedMaterial.color,
-      transparent: true,
-      opacity: 0.8
-    });
-    
-    modalPanelMesh = new THREE.Mesh(panelGeometry, panelMaterial);
-    modalPanelMesh.castShadow = true;
-    modalPanelMesh.receiveShadow = true;
-    modalScene.add(modalPanelMesh);
-    
-    // Récupération des paramètres de découpe
-    const cutRadius = parseFloat(document.getElementById('cut-radius').value) || 25;
-    const cutDepth = parseFloat(document.getElementById('cut-depth').value) || 18;
-    const cutPositionX = parseFloat(document.getElementById('cut-position-x').value) || 0;
-    const cutPositionZ = parseFloat(document.getElementById('cut-position-z').value) || 0;
-    
-    // Création de la découpe circulaire
-    const cutGeometry = createCylinderGeometryForHole({
-      radius: cutRadius * 0.3, // Échelle réduite pour l'aperçu
-      depth: cutDepth,
-      segments: 32
-    });
-    
-    const cutMaterial = new THREE.MeshLambertMaterial({
-      color: 0xff4444,
-      transparent: true,
-      opacity: 0.6
-    });
-    
-    modalCutMesh = new THREE.Mesh(cutGeometry, cutMaterial);
-    modalCutMesh.position.set(
-      cutPositionX * 0.3, // Échelle réduite
-      previewPanelConfig.thickness / 2,
-      cutPositionZ * 0.3  // Échelle réduite
-    );
-    modalCutMesh.castShadow = true;
-    modalScene.add(modalCutMesh);
-    
-    // Mise à jour des contrôles de la caméra
-    modalControls.target.set(0, previewPanelConfig.thickness / 2, 0);
-    modalControls.update();
-    
-    console.log('Aperçu 3D du modal mis à jour');
-    
-  } catch (error) {
-    console.error('Erreur lors de la mise à jour de l\'aperçu 3D:', error);
-  }
-}
-
-/**
- * Boucle d'animation pour le modal
- */
-function animateModal() {
-  if (modalRenderer && modalScene && modalCamera && modalControls) {
-    modalControls.update();
-    modalRenderer.render(modalScene, modalCamera);
-  }
-}
-
-/**
- * Nettoie les ressources du modal
- */
-function cleanupModalScene() {
-  if (modalPanelMesh) {
-    modalScene.remove(modalPanelMesh);
-    modalPanelMesh.geometry.dispose();
-    modalPanelMesh.material.dispose();
-    modalPanelMesh = null;
-  }
-  
-  if (modalCutMesh) {
-    modalScene.remove(modalCutMesh);
-    modalCutMesh.geometry.dispose();
-    modalCutMesh.material.dispose();
-    modalCutMesh = null;
-  }
-  
-  if (modalRenderer) {
-    modalRenderer.dispose();
-    modalRenderer = null;
-  }
-  
-  if (modalControls) {
-    modalControls.dispose();
-    modalControls = null;
-  }
-  
-  modalScene = null;
-  modalCamera = null;
-  
-  console.log('Ressources du modal nettoyées');
-}
 
 /**
  * Initialisation de la scène Three.js
@@ -1297,7 +1093,7 @@ function initUIControls() {
   initGridControls();
 
   // Initialisation des contrôles du modal de découpe circulaire
-  initCircularCutModal();
+  initCircularCutModal(config);
 }
 
 /**
@@ -1389,89 +1185,6 @@ function initGridControls() {
 /**
  * Initialise les contrôles du modal de découpe circulaire
  */
-function initCircularCutModal() {
-  const openModalButton = document.getElementById('open-circular-cut-modal');
-  const closeModalButton = document.getElementById('close-circular-cut-modal');
-  const modal = document.getElementById('circular-cut-modal');
-  const cancelButton = document.getElementById('cancel-cut');
-  const previewButton = document.getElementById('preview-cut');
-  const applyButton = document.getElementById('apply-cut');
-
-  // Ouverture du modal
-  openModalButton.addEventListener('click', () => {
-    modal.classList.add('active');
-    
-    // Initialisation de la scène 3D du modal
-    setTimeout(() => {
-      initModalScene();
-    }, 100); // Petit délai pour s'assurer que le modal est visible
-    
-    console.log('Modal de découpe circulaire ouvert');
-  });
-
-  // Fermeture du modal
-  function closeModal() {
-    modal.classList.remove('active');
-    
-    // Nettoyage des ressources 3D
-    cleanupModalScene();
-    
-    console.log('Modal de découpe circulaire fermé');
-  }
-
-  closeModalButton.addEventListener('click', closeModal);
-  cancelButton.addEventListener('click', closeModal);
-
-  // Fermeture en cliquant sur l'overlay
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      closeModal();
-    }
-  });
-
-  // Fermeture avec la touche Escape
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modal.classList.contains('active')) {
-      closeModal();
-    }
-  });
-
-  // Mise à jour de l'aperçu en temps réel
-  const parameterInputs = [
-    'cut-radius',
-    'cut-depth', 
-    'cut-position-x',
-    'cut-position-z'
-  ];
-  
-  parameterInputs.forEach(inputId => {
-    const input = document.getElementById(inputId);
-    if (input) {
-      input.addEventListener('input', () => {
-        if (modalScene) {
-          updateModalPreview();
-        }
-      });
-    }
-  });
-
-  // Bouton d'aperçu
-  previewButton.addEventListener('click', () => {
-    if (modalScene) {
-      updateModalPreview();
-    }
-    console.log('Aperçu de la découpe circulaire mis à jour');
-  });
-
-  // Bouton d'application
-  applyButton.addEventListener('click', () => {
-    console.log('Application de la découpe circulaire - À implémenter');
-    // TODO: Implémenter l'application de la découpe au panneau principal
-    closeModal();
-  });
-
-  console.log('Contrôles du modal de découpe circulaire initialisés');
-}
 
 /**
  * Fonction principale pour mettre à jour le panneau 3D avec les opérations CSG
@@ -1629,6 +1342,8 @@ function handleWindowResize() {
   cubeRenderer.setSize(200, 200);
   
   // Redimensionnement du renderer du modal si actif
+  const modalRenderer = getModalRenderer();
+  const modalCamera = getModalCamera();
   if (modalRenderer && modalCamera) {
     const modalContainer = document.querySelector('.modal-3d-display');
     if (modalContainer) {
