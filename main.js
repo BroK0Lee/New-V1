@@ -31,7 +31,6 @@ let isDraggingCube = false;
 let lastCubePointer = new THREE.Vector2();
 let cubeOffsetQuat = new THREE.Quaternion();
 let currentPanelMesh = null;
-let currentEdgesMesh = null; // Nouveau: mesh pour les arêtes
 let xLabelObj = null, yLabelObj = null, zLabelObj = null; // Références aux labels des axes
 let axesHelper = null; // Référence aux axes pour pouvoir les redimensionner
 
@@ -46,13 +45,6 @@ const config = {
     material: 'pine' // Matériau par défaut
   },
   cuts: [], // Tableau pour les futures découpes (trous, entailles, etc.)
-  visualization: {
-    showEdges: true,        // Afficher les arêtes
-    edgeColor: 0x000000,    // Couleur des arêtes (noir)
-    edgeThickness: 1.5,     // Épaisseur des arêtes
-    selectionColor: 0xff6b35, // Couleur de sélection (orange)
-    selectionOpacity: 0.6   // Opacité de la sélection
-  },
   grid: {
     show: false,           // Grille masquée par défaut
     sizeX: 10,            // Taille des cases en X (mm)
@@ -447,62 +439,6 @@ function onCubePointerUp() {
 }
 
 /**
- * Crée la géométrie des arêtes pour un mesh donné
- * @param {THREE.Mesh} mesh - Le mesh dont on veut extraire les arêtes
- * @returns {THREE.EdgesGeometry} - La géométrie des arêtes
- */
-function createEdgesGeometry(mesh) {
-  // Utilisation d'EdgesGeometry pour détecter automatiquement les arêtes
-  // avec un angle de seuil pour ne garder que les arêtes significatives
-  const edgesGeometry = new THREE.EdgesGeometry(mesh.geometry, 15); // 15 degrés de seuil
-  return edgesGeometry;
-}
-
-/**
- * Met à jour la visualisation des arêtes
- * @param {THREE.Mesh} panelMesh - Le mesh du panneau
- */
-function updateEdgesVisualization(panelMesh) {
-  // Suppression des anciennes arêtes
-  if (currentEdgesMesh) {
-    scene.remove(currentEdgesMesh);
-    currentEdgesMesh.geometry.dispose();
-    currentEdgesMesh.material.dispose();
-    currentEdgesMesh = null;
-  }
-  
-  // Création des nouvelles arêtes si activées
-  if (config.visualization.showEdges && panelMesh) {
-    try {
-      const edgesGeometry = createEdgesGeometry(panelMesh);
-      
-      // Matériau pour les arêtes
-      const edgesMaterial = new THREE.LineBasicMaterial({
-        color: config.visualization.edgeColor,
-        linewidth: config.visualization.edgeThickness,
-        transparent: true,
-        opacity: 0.8
-      });
-      
-      // Création du mesh des arêtes
-      currentEdgesMesh = new THREE.LineSegments(edgesGeometry, edgesMaterial);
-      
-      // Copie de la transformation du mesh principal
-      currentEdgesMesh.position.copy(panelMesh.position);
-      currentEdgesMesh.rotation.copy(panelMesh.rotation);
-      currentEdgesMesh.scale.copy(panelMesh.scale);
-      
-      // Ajout à la scène
-      scene.add(currentEdgesMesh);
-      
-      console.log('Arêtes mises à jour avec succès');
-    } catch (error) {
-      console.error('Erreur lors de la création des arêtes:', error);
-    }
-  }
-}
-
-/**
  * Wrapper functions pour la grille - utilisent le module grid.js
  */
 function toggleGridDisplay(show) {
@@ -714,9 +650,6 @@ function updatePanel3D(panelConfig) {
     // Ajout à la scène
     scene.add(currentPanelMesh);
     
-    // Mise à jour de la visualisation des arêtes
-    updateEdgesVisualization(currentPanelMesh);
-    
     console.log('Panneau 3D mis à jour avec succès');
     
   } catch (error) {
@@ -729,9 +662,6 @@ function updatePanel3D(panelConfig) {
     currentPanelMesh.castShadow = true;
     currentPanelMesh.receiveShadow = true;
     scene.add(currentPanelMesh);
-    
-    // Mise à jour des arêtes même en cas d'erreur
-    updateEdgesVisualization(currentPanelMesh);
   }
 }
 
