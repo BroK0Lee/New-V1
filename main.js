@@ -16,6 +16,13 @@ import {
   getModalRenderer
 } from './src/modals/circularCutModal.js';
 import { CSGManager } from './src/csg/CSGManager.ts';
+import {
+  updateGrid,
+  toggleGrid as toggleGridHelper,
+  updateGridSettings as updateGridSettingsHelper,
+  calculateOptimalGridSize,
+  disposeGrid
+} from './src/Tools/grid.js';
 
 // Variables globales pour la scène Three.js
 let scene, camera, renderer, controls, labelRenderer;
@@ -25,7 +32,6 @@ let lastCubePointer = new THREE.Vector2();
 let cubeOffsetQuat = new THREE.Quaternion();
 let currentPanelMesh = null;
 let currentEdgesMesh = null; // Nouveau: mesh pour les arêtes
-let gridHelper = null; // Référence à la grille pour pouvoir la repositionner
 let xLabelObj = null, yLabelObj = null, zLabelObj = null; // Références aux labels des axes
 let axesHelper = null; // Référence aux axes pour pouvoir les redimensionner
 
@@ -72,178 +78,6 @@ const constraints = {
 };
 
 // Définition des matériaux disponibles (déplacée dans src/materials.js)
-
-/**
- * Calcule la taille optimale de la grille selon les dimensions du panneau
- * @param {Object} panelConfig - Configuration du panneau
- * @returns {Object} Configuration de grille optimale
- */
-function calculateOptimalGridSize(panelConfig) {
-  const { length, width } = panelConfig;
-  const maxDimension = Math.max(length, width);
-  
-  let sizeX, sizeZ;
-  
-  // Règles de taille automatique
-  if (maxDimension <= 250) {
-    // Petits modèles : grille 10x10mm
-    sizeX = sizeZ = 10;
-  } else if (maxDimension <= 1000) {
-    // Modèles moyens : grille 50x50mm
-    sizeX = sizeZ = 50;
-  } else {
-    // Grands modèles : grille 100x100mm
-    sizeX = sizeZ = 100;
-  }
-  
-  return { sizeX, sizeZ };
-}
-
-/**
- * Met à jour la grille en fonction des dimensions du panneau et de la configuration
- * @param {Object} panelConfig - Configuration du panneau
- */
-function updateGrid(panelConfig) {
-  // Suppression de l'ancienne grille
-  if (gridHelper) {
-    scene.remove(gridHelper);
-    // Dispose properly of all child geometries and materials
-    gridHelper.children.forEach(child => {
-      if (child.geometry) {
-        child.geometry.dispose();
-      }
-      if (child.material) {
-        child.material.dispose();
-      }
-    });
-    gridHelper = null;
-  }
-  
-  // Ne créer la grille que si elle doit être affichée
-  if (!config.grid.show) {
-    return;
-  }
-  
-  // Calcul de la taille de grille
-  let gridSizeX, gridSizeZ;
-  
-  if (config.grid.autoSize) {
-    const optimalSize = calculateOptimalGridSize(panelConfig);
-    gridSizeX = optimalSize.sizeX;
-    gridSizeZ = optimalSize.sizeZ;
-    
-    // Mise à jour de la configuration pour l'interface
-    config.grid.sizeX = gridSizeX;
-    config.grid.sizeZ = gridSizeZ;
-  } else {
-    gridSizeX = config.grid.sizeX;
-    gridSizeZ = config.grid.sizeZ;
-  }
-  
-  // Calcul des dimensions totales de la grille
-  const totalSizeX = Math.max(panelConfig.length * 1.5, 300);
-  const totalSizeZ = Math.max(panelConfig.width * 1.5, 300);
-  
-  // Calcul du nombre de divisions
-  const divisionsX = Math.ceil(totalSizeX / gridSizeX);
-  const divisionsZ = Math.ceil(totalSizeZ / gridSizeZ);
-  
-  // Création de la grille personnalisée
-  gridHelper = createCustomGrid(totalSizeX, totalSizeZ, divisionsX, divisionsZ);
-  gridHelper.position.set(0, 0, 0); // Grille au niveau du sol
-  scene.add(gridHelper);
-  
-  console.log(`Grille mise à jour - Taille des cases: ${gridSizeX}x${gridSizeZ}mm, Divisions: ${divisionsX}x${divisionsZ}`);
-}
-
-/**
- * Crée une grille personnalisée avec des tailles de cases différentes en X et Z
- * @param {number} sizeX - Taille totale en X
- * @param {number} sizeZ - Taille totale en Z
- * @param {number} divisionsX - Nombre de divisions en X
- * @param {number} divisionsZ - Nombre de divisions en Z
- * @returns {THREE.Group} Groupe contenant la grille
- */
-function createCustomGrid(sizeX, sizeZ, divisionsX, divisionsZ) {
-  const group = new THREE.Group();
-  
-  const material = new THREE.LineBasicMaterial({ 
-    color: 0xcccccc, 
-    transparent: true, 
-    opacity: 0.5 
-  });
-  
-  // Lignes parallèles à l'axe X (direction Z)
-  for (let i = 0; i <= divisionsZ; i++) {
-    const geometry = new THREE.BufferGeometry();
-    const z = (i / divisionsZ - 0.5) * sizeZ;
-    const points = [
-      new THREE.Vector3(-sizeX / 2, 0, z),
-      new THREE.Vector3(sizeX / 2, 0, z)
-    ];
-    geometry.setFromPoints(points);
-    const line = new THREE.Line(geometry, material);
-    group.add(line);
-  }
-  
-  // Lignes parallèles à l'axe Z (direction X)
-  for (let i = 0; i <= divisionsX; i++) {
-    const geometry = new THREE.BufferGeometry();
-    const x = (i / divisionsX - 0.5) * sizeX;
-    const points = [
-      new THREE.Vector3(x, 0, -sizeZ / 2),
-      new THREE.Vector3(x, 0, sizeZ / 2)
-    ];
-    geometry.setFromPoints(points);
-    const line = new THREE.Line(geometry, material);
-    group.add(line);
-  }
-  
-  return group;
-}
-
-/**
- * Affiche ou masque la grille
- * @param {boolean} show - État d'affichage de la grille
- */
-function toggleGrid(show) {
-  config.grid.show = show;
-  updateGrid(config.panel);
-  
-  // Mise à jour de l'interface
-  const gridButton = document.getElementById('toggle-grid');
-  const gridControls = document.getElementById('grid-controls');
-  
-  if (gridButton) {
-    gridButton.textContent = show ? 'Masquer la grille' : 'Afficher la grille';
-    gridButton.classList.toggle('active', show);
-  }
-  
-  if (gridControls) {
-    gridControls.style.display = show ? 'block' : 'none';
-  }
-  
-  console.log(`Grille ${show ? 'affichée' : 'masquée'}`);
-}
-
-/**
- * Met à jour les paramètres de la grille
- * @param {number} sizeX - Taille des cases en X
- * @param {number} sizeZ - Taille des cases en Z
- * @param {boolean} autoSize - Mode automatique
- */
-function updateGridSettings(sizeX, sizeZ, autoSize) {
-  config.grid.sizeX = Math.max(1, sizeX);
-  config.grid.sizeZ = Math.max(1, sizeZ);
-  config.grid.autoSize = autoSize;
-  
-  // Mise à jour de la grille si elle est affichée
-  if (config.grid.show) {
-    updateGrid(config.panel);
-  }
-  
-  console.log(`Paramètres de grille mis à jour - X: ${config.grid.sizeX}mm, Z: ${config.grid.sizeZ}mm, Auto: ${config.grid.autoSize}`);
-}
 
 /**
  * Calcule la position optimale de la caméra en fonction des dimensions du panneau
@@ -669,6 +503,17 @@ function updateEdgesVisualization(panelMesh) {
 }
 
 /**
+ * Wrapper functions pour la grille - utilisent le module grid.js
+ */
+function toggleGridDisplay(show) {
+  toggleGridHelper(show, config.grid, config.panel, scene);
+}
+
+function updateGridSettingsWrapper(sizeX, sizeZ, autoSize) {
+  updateGridSettingsHelper(sizeX, sizeZ, autoSize, config.grid, config.panel, scene);
+}
+
+/**
  * Initialise les contrôles de l'interface utilisateur
  */
 function initUIControls() {
@@ -804,7 +649,7 @@ function initGridControls() {
   
   // Bouton d'affichage/masquage de la grille
   toggleGridButton.addEventListener('click', () => {
-    toggleGrid(!config.grid.show);
+    toggleGridDisplay(!config.grid.show);
   });
   
   // Checkbox pour la taille automatique
@@ -817,7 +662,7 @@ function initGridControls() {
       const optimalSize = calculateOptimalGridSize(config.panel);
       gridSizeXInput.value = optimalSize.sizeX;
       gridSizeZInput.value = optimalSize.sizeZ;
-      updateGridSettings(optimalSize.sizeX, optimalSize.sizeZ, true);
+      updateGridSettingsWrapper(optimalSize.sizeX, optimalSize.sizeZ, true);
     }
   });
   
@@ -827,7 +672,7 @@ function initGridControls() {
     const sizeZ = parseInt(gridSizeZInput.value);
     const autoSize = gridAutoSizeCheckbox.checked;
     
-    updateGridSettings(sizeX, sizeZ, autoSize);
+    updateGridSettingsWrapper(sizeX, sizeZ, autoSize);
   });
   
   // Mise à jour en temps réel avec Enter
@@ -855,7 +700,7 @@ function updatePanel3D(panelConfig) {
   }
   
   // Mise à jour de la grille selon les nouvelles dimensions du panneau
-  updateGrid(panelConfig.panel);
+  updateGrid(panelConfig.panel, config.grid, scene);
   
   // Mise à jour des axes selon les nouvelles dimensions du panneau
   updateAxes(panelConfig.panel);
@@ -975,5 +820,5 @@ if (document.readyState === 'loading') {
 // Export des fonctions utiles pour les futures extensions
 window.updatePanel3D = updatePanel3D;
 window.config = config;
-window.toggleGrid = toggleGrid;
-window.updateGridSettings = updateGridSettings;
+window.toggleGrid = toggleGridDisplay;
+window.updateGridSettings = updateGridSettingsWrapper;
