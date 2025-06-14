@@ -159,7 +159,6 @@ function initCircularCutModal(config) {
   const closeModalButton = document.getElementById('close-circular-cut-modal');
   const modal = document.getElementById('circular-cut-modal');
   const cancelButton = document.getElementById('cancel-cut');
-  const previewButton = document.getElementById('preview-cut');
   const applyButton = document.getElementById('apply-cut');
   const cutThroughCheckbox = document.getElementById('cut-through');
   const cutDepthInput = document.getElementById('cut-depth');
@@ -220,12 +219,6 @@ function initCircularCutModal(config) {
           updateModalPreview();
         }
       });
-    }
-  });
-
-  previewButton.addEventListener('click', () => {
-    if (modalScene) {
-      updateModalPreview();
     }
   });
 
