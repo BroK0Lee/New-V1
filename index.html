@@ -89,9 +89,9 @@
           <div class="modal-parameters">
             <h4>Paramètres de la découpe</h4>
             <div class="parameter-group">
-              <label for="cut-radius">Rayon (mm):</label>
-              <input type="number" id="cut-radius" value="25" min="1" max="500" step="0.1">
-              <small>Rayon du trou circulaire</small>
+              <label for="cut-diameter">Diamètre (mm):</label>
+              <input type="number" id="cut-diameter" value="50" min="2" max="1000" step="0.1">
+              <small>Diamètre du trou circulaire</small>
             </div>
             <div class="parameter-group">
               <label for="cut-depth">Profondeur (mm):</label>
@@ -99,14 +99,11 @@
               <small>Profondeur de perçage</small>
             </div>
             <div class="parameter-group">
-              <label for="cut-position-x">Position X (mm):</label>
-              <input type="number" id="cut-position-x" value="0" step="0.1">
-              <small>Position horizontale</small>
-            </div>
-            <div class="parameter-group">
-              <label for="cut-position-z">Position Z (mm):</label>
-              <input type="number" id="cut-position-z" value="0" step="0.1">
-              <small>Position verticale</small>
+              <label>
+                <input type="checkbox" id="cut-through">
+                Découpe traversante
+              </label>
+              <small>Traverse toute l'épaisseur du panneau</small>
             </div>
             <div class="modal-actions">
               <button id="preview-cut" class="update-button" style="background-color: #28a745;">Aperçu</button>

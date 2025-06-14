@@ -1,14 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { createPanelGeometry, createCylinderGeometryForHole } from '../models/index.js';
-import { materials } from '../materials.js';
+import { createCylinderGeometryForHole } from '../models/index.js';
 import { updateAxesAndLabels, disposeAxes } from '../Tools/axesHelper.js';
 
 let modalScene = null;
 let modalCamera = null;
 let modalRenderer = null;
 let modalControls = null;
-let modalPanelMesh = null;
 let modalCutMesh = null;
 let cfg = null;
 
@@ -22,7 +20,8 @@ function initModalScene(config) {
 
   const aspect = modalContainer.clientWidth / modalContainer.clientHeight;
   modalCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-  modalCamera.position.set(150, 150, 150);
+  modalCamera.position.set(100, 100, 100);
+  modalCamera.lookAt(0, 0, 0);
 
   modalRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   modalRenderer.setSize(modalContainer.clientWidth, modalContainer.clientHeight);
@@ -36,20 +35,11 @@ function initModalScene(config) {
   modalControls = new OrbitControls(modalCamera, modalRenderer.domElement);
   modalControls.enableDamping = true;
   modalControls.dampingFactor = 0.05;
-  modalControls.target.set(0, 10, 0);
-  modalControls.minDistance = 50;
-  modalControls.maxDistance = 500;
+  modalControls.target.set(0, 0, 0);
+  modalControls.minDistance = 30;
+  modalControls.maxDistance = 300;
 
   setupModalLighting();
-  
-  // Ajout des axes avec labels dans le modal
-  const previewPanelConfig = {
-    length: Math.min(cfg.panel.length * 0.3, 200),
-    width: Math.min(cfg.panel.width * 0.3, 100),
-    thickness: cfg.panel.thickness
-  };
-  updateAxesAndLabels(previewPanelConfig, modalScene);
-  
   updateModalPreview();
 }
 
@@ -76,12 +66,7 @@ function setupModalLighting() {
 }
 
 function updateModalPreview() {
-  if (modalPanelMesh) {
-    modalScene.remove(modalPanelMesh);
-    modalPanelMesh.geometry.dispose();
-    modalPanelMesh.material.dispose();
-    modalPanelMesh = null;
-  }
+  // Suppression du mesh de découpe existant
   if (modalCutMesh) {
     modalScene.remove(modalCutMesh);
     modalCutMesh.geometry.dispose();
@@ -89,32 +74,24 @@ function updateModalPreview() {
     modalCutMesh = null;
   }
 
-  const previewPanelConfig = {
-    length: Math.min(cfg.panel.length * 0.3, 200),
-    width: Math.min(cfg.panel.width * 0.3, 100),
-    thickness: cfg.panel.thickness
-  };
+  // Lecture des paramètres depuis l'interface
+  const cutDiameter = parseFloat(document.getElementById('cut-diameter').value) || 50;
+  const cutRadius = cutDiameter / 2; // Conversion diamètre -> rayon
+  const cutThroughCheckbox = document.getElementById('cut-through');
+  const cutDepthInput = document.getElementById('cut-depth');
+  
+  let cutDepth;
+  if (cutThroughCheckbox && cutThroughCheckbox.checked) {
+    // Si découpe traversante, utiliser l'épaisseur du panneau
+    cutDepth = cfg.panel.thickness;
+  } else {
+    // Sinon, utiliser la valeur saisie
+    cutDepth = parseFloat(cutDepthInput.value) || 18;
+  }
 
-  const panelGeometry = createPanelGeometry(previewPanelConfig);
-  const selectedMaterial = materials[cfg.panel.material] || materials.pine;
-  const panelMaterial = new THREE.MeshLambertMaterial({
-    color: selectedMaterial.color,
-    transparent: true,
-    opacity: 0.8
-  });
-
-  modalPanelMesh = new THREE.Mesh(panelGeometry, panelMaterial);
-  modalPanelMesh.castShadow = true;
-  modalPanelMesh.receiveShadow = true;
-  modalScene.add(modalPanelMesh);
-
-  const cutRadius = parseFloat(document.getElementById('cut-radius').value) || 25;
-  const cutDepth = parseFloat(document.getElementById('cut-depth').value) || 18;
-  const cutPositionX = parseFloat(document.getElementById('cut-position-x').value) || 0;
-  const cutPositionZ = parseFloat(document.getElementById('cut-position-z').value) || 0;
-
+  // Création de la géométrie du cylindre
   const cutGeometry = createCylinderGeometryForHole({
-    radius: cutRadius * 0.3,
+    radius: cutRadius,
     depth: cutDepth,
     segments: 32
   });
@@ -122,23 +99,24 @@ function updateModalPreview() {
   const cutMaterial = new THREE.MeshLambertMaterial({
     color: 0xff4444,
     transparent: true,
-    opacity: 0.6
+    opacity: 0.8
   });
 
   modalCutMesh = new THREE.Mesh(cutGeometry, cutMaterial);
-  modalCutMesh.position.set(
-    cutPositionX * 0.3,
-    previewPanelConfig.thickness / 2,
-    cutPositionZ * 0.3
-  );
+  modalCutMesh.position.set(0, 0, 0); // Centré à l'origine
   modalCutMesh.castShadow = true;
   modalScene.add(modalCutMesh);
 
-  modalControls.target.set(0, previewPanelConfig.thickness / 2, 0);
+  // Mise à jour des axes selon les dimensions du cylindre
+  const cylinderConfig = {
+    length: cutDiameter,
+    width: cutDiameter,
+    thickness: cutDepth
+  };
+  updateAxesAndLabels(cylinderConfig, modalScene);
+
+  modalControls.target.set(0, 0, 0);
   modalControls.update();
-  
-  // Mise à jour des axes après changement du modèle
-  updateAxesAndLabels(previewPanelConfig, modalScene);
 }
 
 function animateModal() {
@@ -149,13 +127,6 @@ function animateModal() {
 }
 
 function cleanupModalScene() {
-  if (modalPanelMesh) {
-    modalScene.remove(modalPanelMesh);
-    modalPanelMesh.geometry.dispose();
-    modalPanelMesh.material.dispose();
-    modalPanelMesh = null;
-  }
-
   if (modalCutMesh) {
     modalScene.remove(modalCutMesh);
     modalCutMesh.geometry.dispose();
@@ -190,6 +161,8 @@ function initCircularCutModal(config) {
   const cancelButton = document.getElementById('cancel-cut');
   const previewButton = document.getElementById('preview-cut');
   const applyButton = document.getElementById('apply-cut');
+  const cutThroughCheckbox = document.getElementById('cut-through');
+  const cutDepthInput = document.getElementById('cut-depth');
 
   openModalButton.addEventListener('click', () => {
     modal.classList.add('active');
@@ -218,7 +191,28 @@ function initCircularCutModal(config) {
     }
   });
 
-  ['cut-radius','cut-depth','cut-position-x','cut-position-z'].forEach(id => {
+  // Gestion de la case à cocher "Découpe traversante"
+  if (cutThroughCheckbox && cutDepthInput) {
+    cutThroughCheckbox.addEventListener('change', () => {
+      if (cutThroughCheckbox.checked) {
+        // Découpe traversante : désactiver l'input de profondeur et utiliser l'épaisseur du panneau
+        cutDepthInput.value = cfg.panel.thickness;
+        cutDepthInput.disabled = true;
+      } else {
+        // Découpe normale : réactiver l'input et remettre une valeur par défaut
+        cutDepthInput.disabled = false;
+        cutDepthInput.value = 18;
+      }
+      
+      // Mise à jour de l'aperçu si le modal est actif
+      if (modalScene) {
+        updateModalPreview();
+      }
+    });
+  }
+
+  // Écouteurs pour les changements de paramètres (diamètre et profondeur)
+  ['cut-diameter', 'cut-depth'].forEach(id => {
     const input = document.getElementById(id);
     if (input) {
       input.addEventListener('input', () => {

@@ -52,10 +52,10 @@ export function updateAxisLabels(panelConfig, scene) {
   // Suppression des anciens labels
   disposeAxisLabels(scene);
   
-  // Calcul des nouvelles positions basées sur les dimensions du panneau
-  const xPosition = (panelConfig.length / 2) + 300; // Position X basée sur la longueur + décalage
-  const yPosition = (panelConfig.thickness / 2) + 800; // Position Y basée sur l'épaisseur + décalage
-  const zPosition = (panelConfig.width / 2) + 550; // Position Z basée sur la largeur + décalage
+  // Calcul des nouvelles positions basées sur les dimensions du panneau avec des offsets plus petits
+  const xPosition = (panelConfig.length / 2) + 30; // Position X basée sur la longueur + décalage réduit
+  const yPosition = (panelConfig.thickness / 2) + 30; // Position Y basée sur l'épaisseur + décalage réduit
+  const zPosition = (panelConfig.width / 2) + 30; // Position Z basée sur la largeur + décalage réduit
   
   // Création des nouveaux labels
   xLabelObj = createAxisLabel('X');
